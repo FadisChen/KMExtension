@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KM Extension</title>
+  <link rel="stylesheet" href="../css/sidepanel.css">
+</head>
+<body>
+  <div class="side-panel">    <!-- 功能列 -->
+    <div class="function-bar">
+      <h1>知識管理工具</h1>
+      <div class="function-buttons">
+        <button id="captureBtn" class="btn capture-btn">擷取</button>
+        <button id="cancelCaptureBtn" class="btn cancel-btn" style="display: none;">取消擷取</button>
+        <button id="exportBtn" class="btn export-btn">匯出</button>        <div class="speech-settings">
+          <label for="speechRate" title="語音速度">🔊</label>
+          <input type="range" id="speechRate" min="0.25" max="2" step="0.25" value="1">
+          <span id="speechRateValue">1.0</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 知識卡片區域 -->
+    <div class="cards-container" id="cardsContainer">
+      <!-- 空白狀態 -->
+      <div class="empty-state" id="emptyState">
+        <p>尚未有知識卡片。點擊 "擷取" 開始收集知識！</p>
+      </div>
+      
+      <!-- 知識卡片將在此動態生成 -->
+    </div>
+    
+    <!-- 匯出選項 -->
+    <div id="exportModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>選擇要匯出的知識卡片</h2>
+          <span class="close" id="closeExportModal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="export-options">
+            <div class="select-all-option">
+              <input type="checkbox" id="selectAllCards">
+              <label for="selectAllCards">全選</label>
+            </div>
+            <div class="export-cards-list" id="exportCardsList">
+              <!-- 卡片選項將在此動態生成 -->
+            </div>
+          </div>
+          <div class="export-buttons">
+            <button id="confirmExportBtn" class="btn confirm-btn">匯出</button>
+            <button id="cancelExportBtn" class="btn cancel-btn">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 刪除確認 -->
+    <div id="deleteConfirmModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>確認刪除</h2>
+          <span class="close" id="closeDeleteModal">&times;</span>
+        </div>
+        <div class="modal-body">
+          <p>確定要刪除這個知識卡片嗎？此操作無法撤銷。</p>
+          <div class="delete-buttons">
+            <button id="confirmDeleteBtn" class="btn delete-btn">刪除</button>
+            <button id="cancelDeleteBtn" class="btn cancel-btn">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="../js/database.js"></script>
+  <script src="../js/sidepanel.js"></script>
+</body>
+</html> 
