@@ -110,7 +110,8 @@ function captureElement(element) {
   const pageTitle = document.title;
   const timestamp = new Date().toISOString();
   const textContent = element.innerText || element.textContent;
-  const htmlContent = element.innerHTML;
+  //htmlContent需濾除<script>...</script>裡的內容
+  const htmlContent = element.innerHTML.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   
   // 發送擷取的內容給側邊欄
   chrome.runtime.sendMessage({
