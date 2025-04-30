@@ -28,7 +28,7 @@ function startCapture() {
   createOverlay();
   
   // 變更游標樣式
-  document.body.style.cursor = 'crosshair';
+  document.body.style.cursor = 'pointer';
   
   console.log('開始擷取模式');
 }

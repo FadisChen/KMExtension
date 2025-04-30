@@ -10,8 +10,7 @@
       "128": "src/assets/icon128.png"
     },
     "default_title": "KM Extension"
-  },
-  "permissions": [
+  },  "permissions": [
     "activeTab",
     "storage",
     "scripting",

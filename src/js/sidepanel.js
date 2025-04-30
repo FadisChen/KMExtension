@@ -6,6 +6,27 @@ const cardsContainer = document.getElementById('cardsContainer');
 const emptyState = document.getElementById('emptyState');
 const speechRateInput = document.getElementById('speechRate');
 const speechRateValue = document.getElementById('speechRateValue');
+const settingsIcon = document.getElementById('settingsIcon');
+
+// 設定視窗元素
+const settingsModal = document.getElementById('settingsModal');
+const closeSettingsModal = document.getElementById('closeSettingsModal');
+const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
+const geminiApiKeyInput = document.getElementById('geminiApiKey');
+const geminiModelInput = document.getElementById('geminiModel');
+
+// 卡片功能選單元素
+const cardMenu = document.getElementById('cardMenu');
+const speakMenuItem = document.getElementById('speakMenuItem');
+const summarizeMenuItem = document.getElementById('summarizeMenuItem');
+const deleteMenuItem = document.getElementById('deleteMenuItem');
+
+// 摘要視窗元素
+const summaryModal = document.getElementById('summaryModal');
+const closeSummaryModal = document.getElementById('closeSummaryModal');
+const closeSummaryBtn = document.getElementById('closeSummaryBtn');
+const summaryContent = document.getElementById('summaryContent');
 
 // 匯出模態框元素
 const exportModal = document.getElementById('exportModal');
@@ -24,6 +45,9 @@ const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
 // 當前活動的刪除卡片 ID
 let currentDeleteCardId = null;
 
+// 當前活動的卡片（用於選單和摘要）
+let currentActiveCard = null;
+
 // 當前是否處於擷取模式
 let isCapturing = false;
 
@@ -31,7 +55,7 @@ let isCapturing = false;
 document.addEventListener('DOMContentLoaded', () => {
   loadCards();
   setupEventListeners();
-  updateSpeechRate(); // 初始化語音速度顯示
+  loadSettings();
 });
 
 // 設置事件監聽器
@@ -45,9 +69,56 @@ function setupEventListeners() {
   closeExportModal.addEventListener('click', hideExportModal);
   cancelExportBtn.addEventListener('click', hideExportModal);
   confirmExportBtn.addEventListener('click', exportSelectedCards);
+    // 設定按鈕和相關功能
+  if (settingsIcon) {
+    settingsIcon.addEventListener('click', showSettingsModal);
+  }
+  
+  if (closeSettingsModal) {
+    closeSettingsModal.addEventListener('click', hideSettingsModal);
+  }
+  
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', saveSettings);
+  }
+  
+  if (cancelSettingsBtn) {
+    cancelSettingsBtn.addEventListener('click', hideSettingsModal);
+  }
   
   // 語音速度滑桿
   speechRateInput.addEventListener('input', updateSpeechRate);
+    // 卡片功能選單
+  if (speakMenuItem) {
+    speakMenuItem.addEventListener('click', handleSpeakMenuItemClick);
+  }
+  
+  if (summarizeMenuItem) {
+    summarizeMenuItem.addEventListener('click', handleSummarizeMenuItemClick);
+  }
+  
+  if (deleteMenuItem) {
+    deleteMenuItem.addEventListener('click', handleDeleteMenuItemClick);
+  }
+  
+  // 摘要視窗
+  if (closeSummaryModal) {
+    closeSummaryModal.addEventListener('click', hideSummaryModal);
+  }
+  
+  if (closeSummaryBtn) {
+    closeSummaryBtn.addEventListener('click', hideSummaryModal);
+  }
+  
+  // 點擊頁面其他部分時關閉卡片選單
+  document.addEventListener('click', (event) => {
+    // 如果點擊的不是選單項目且選單正在顯示，則關閉選單
+    if (!event.target.closest('.card-menu-icon') && 
+        !event.target.closest('.context-menu') &&
+        cardMenu.style.display === 'block') {
+      cardMenu.style.display = 'none';
+    }
+  });
   
   // 全選切換
   selectAllCards.addEventListener('change', toggleSelectAllCards);
@@ -110,34 +181,47 @@ function createCardElement(card) {
   // 格式化時間戳記
   const timestamp = new Date(card.timestamp);
   const formattedDate = `${timestamp.getFullYear()}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}/${timestamp.getDate().toString().padStart(2, '0')} ${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
-  
   cardElement.innerHTML = `
     <div class="card-header">
       <div>
         <div class="card-title">${card.pageTitle}</div>
         <div class="card-timestamp">${formattedDate}</div>
       </div>
-      <div class="card-actions">
-        <div class="speak-icon" data-id="${card.id}" title="朗讀">🔊</div>
-        <div class="delete-icon" data-id="${card.id}" title="刪除">❌</div>
+      <div class="card-menu-icon" data-id="${card.id}" title="功能選單">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="5" r="1"></circle>
+          <circle cx="12" cy="12" r="1"></circle>
+          <circle cx="12" cy="19" r="1"></circle>
+        </svg>
       </div>
     </div>
     <div class="card-content">${card.content}</div>
     ${card.url ? `<a href="${card.url}" class="card-url" target="_blank">${card.url}</a>` : ''}
   `;
-    // 添加刪除事件
-  const deleteIcon = cardElement.querySelector('.delete-icon');
-  deleteIcon.addEventListener('click', () => {
-    showDeleteConfirmation(card.id);
-  });
   
-  // 添加朗讀事件
-  const speakIcon = cardElement.querySelector('.speak-icon');
-  speakIcon.addEventListener('click', () => {
-    speakCardContent(card.content);
+  // 添加功能選單點擊事件
+  const menuIcon = cardElement.querySelector('.card-menu-icon');
+  menuIcon.addEventListener('click', (event) => {
+    showCardMenu(event, card);
   });
   
   return cardElement;
+}
+
+// 顯示卡片功能選單
+function showCardMenu(event, card) {
+  event.stopPropagation();
+  
+  // 儲存當前操作的卡片
+  currentActiveCard = card;
+  
+  // 設定選單位置
+  const rect = event.target.getBoundingClientRect();
+  cardMenu.style.top = `${rect.bottom + window.scrollY}px`;
+  cardMenu.style.left = `${rect.left + window.scrollX - 120}px`; // 向左偏移，使選單在圖示下方
+  
+  // 顯示選單
+  cardMenu.style.display = 'block';
 }
 
 // 開始擷取
@@ -343,72 +427,74 @@ function showNotification(message, type = 'info') {
   }, 3000);
 }
 
+// 全域變數追蹤朗讀狀態
+let isSpeaking = false;
+
 // 朗讀卡片內容
 function speakCardContent(content) {
   // 檢查瀏覽器是否支援語音合成 API
   if ('speechSynthesis' in window) {
-    // 找到點擊的喇叭圖示
-    const speakIcon = event.currentTarget;
-    const cardElement = speakIcon.closest('.knowledge-card');
-      // 如果當前正在朗讀，則停止朗讀
-    if (speakIcon.classList.contains('speaking')) {
-      // 手動停止朗讀不應視為錯誤，僅需取消朗讀
+    try {
+      // 如果正在朗讀則停止
+      if (isSpeaking) {
+        window.speechSynthesis.cancel();
+        isSpeaking = false;
+        showNotification('已停止朗讀', 'info');
+        // 更新選單項文字
+        if (speakMenuItem) {
+          speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
+        }
+        return;
+      }
+      
+      // 停止任何進行中的朗讀
       window.speechSynthesis.cancel();
-      speakIcon.textContent = '🔊';
-      speakIcon.classList.remove('speaking');
-      cardElement.classList.remove('card-speaking');
-      showNotification('已停止朗讀', 'info');
-      return;
-    }
-    
-    // 停止任何進行中的朗讀
-    window.speechSynthesis.cancel();
-    
-    // 重置所有喇叭圖示
-    document.querySelectorAll('.speak-icon').forEach(icon => {
-      icon.textContent = '🔊';
-      icon.classList.remove('speaking');
-    });
-    
-    // 重置所有卡片樣式
-    document.querySelectorAll('.knowledge-card').forEach(card => {
-      card.classList.remove('card-speaking');
-    });
+      
       // 建立新的語音合成訊息
-    const speech = new SpeechSynthesisUtterance(content);
-    
-    // 設定語言為中文
-    speech.lang = 'zh-TW';
+      const speech = new SpeechSynthesisUtterance(content);
+      
+      // 設定語言為中文
+      speech.lang = 'zh-TW';
+      
       // 設定語音速度
-    speech.rate = parseFloat(speechRateInput.value);
-    
-    // 當朗讀開始時
-    speech.onstart = () => {
-      // 更改喇叭圖示的樣式，表示正在朗讀
-      speakIcon.textContent = '⏸️';
-      speakIcon.classList.add('speaking');
-      cardElement.classList.add('card-speaking');
-      showNotification('開始朗讀內容', 'info');
-    };
-    
-    // 當朗讀結束時
-    speech.onend = () => {
-      // 恢復喇叭圖示
-      speakIcon.textContent = '🔊';
-      speakIcon.classList.remove('speaking');
-      cardElement.classList.remove('card-speaking');
-      showNotification('朗讀已完成', 'success');
-    };
+      speech.rate = parseFloat(speechRateInput.value);
+      
+      // 當朗讀開始時
+      speech.onstart = () => {
+        isSpeaking = true;
+        showNotification('開始朗讀內容', 'info');
+        // 更新選單項文字
+        if (speakMenuItem) {
+          speakMenuItem.innerHTML = '<span class="menu-icon">⏸️</span>停止朗讀';
+        }
+      };
+      
+      // 當朗讀結束時
+      speech.onend = () => {
+        isSpeaking = false;
+        showNotification('朗讀已完成', 'success');
+        // 恢復選單項文字
+        if (speakMenuItem) {
+          speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
+        }
+      };
+      
       // 朗讀發生錯誤時
-    speech.onerror = (event) => {
-      // 恢復喇叭圖示
-      speakIcon.textContent = '🔊';
-      speakIcon.classList.remove('speaking');
-      cardElement.classList.remove('card-speaking');
-    };
-    
-    // 開始朗讀
-    window.speechSynthesis.speak(speech);  } else {
+      speech.onerror = (event) => {
+        isSpeaking = false;
+        // 恢復選單項文字
+        if (speakMenuItem) {
+          speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
+        }
+      };
+      
+      // 開始朗讀
+      window.speechSynthesis.speak(speech);
+    } catch (error) {
+      console.error('朗讀功能發生錯誤:', error);
+      showNotification('朗讀功能發生錯誤', 'error');
+    }
+  } else {
     // 瀏覽器不支援語音合成
     showNotification('您的瀏覽器不支援文字轉語音功能', 'error');
   }
@@ -442,5 +528,208 @@ function updateSpeechRate() {
         showNotification(`已更新語音速度為 ${value.toFixed(2)} 倍速`, 'info');
       }
     }
+  }
+}
+
+// 顯示設定視窗
+function showSettingsModal() {
+  // 載入已儲存的設定
+  loadSettings();
+  settingsModal.style.display = 'flex';
+}
+
+// 隱藏設定視窗
+function hideSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+
+// 載入設定
+function loadSettings() {
+  chrome.storage.sync.get(['geminiApiKey', 'geminiModel', 'speechRate'], (result) => {
+    if (result.geminiApiKey) {
+      geminiApiKeyInput.value = result.geminiApiKey;
+    }
+    
+    if (result.geminiModel) {
+      geminiModelInput.value = result.geminiModel;
+    } else {
+      // 設定預設值
+      geminiModelInput.value = 'gemini-2.0-flash';
+    }
+    
+    if (result.speechRate) {
+      speechRateInput.value = result.speechRate;
+      updateSpeechRate();
+    }
+  });
+}
+
+// 儲存設定
+function saveSettings() {  
+  const settings = {
+    geminiApiKey: geminiApiKeyInput.value,
+    geminiModel: geminiModelInput.value,
+    speechRate: speechRateInput.value
+  };
+  
+  chrome.storage.sync.set(settings, () => {
+    hideSettingsModal();
+    showNotification('設定已儲存', 'success');
+  });
+}
+
+// 處理朗讀選單項點擊
+function handleSpeakMenuItemClick() {
+  if (currentActiveCard) {
+    speakCardContent(currentActiveCard.content);
+  }
+  cardMenu.style.display = 'none';
+}
+
+// 處理刪除選單項點擊
+function handleDeleteMenuItemClick() {
+  if (currentActiveCard) {
+    showDeleteConfirmation(currentActiveCard.id);
+  }
+  cardMenu.style.display = 'none';
+}
+
+// 處理摘要選單項點擊
+function handleSummarizeMenuItemClick() {
+  if (currentActiveCard) {
+    generateSummary(currentActiveCard);
+  }
+  cardMenu.style.display = 'none';
+}
+
+// 顯示摘要視窗
+function showSummaryModal() {
+  summaryModal.style.display = 'flex';
+  summaryContent.innerHTML = '<div class="loading-indicator">正在產生摘要...</div>';
+}
+
+// 隱藏摘要視窗
+function hideSummaryModal() {
+  summaryModal.style.display = 'none';
+}
+
+// 生成摘要
+async function generateSummary(card) {
+  // 顯示摘要視窗
+  showSummaryModal();
+  
+  try {
+    // 從儲存的設定中獲取 API key 和模型
+    chrome.storage.sync.get(['geminiApiKey', 'geminiModel'], async (result) => {      const apiKey = result.geminiApiKey;
+      const model = result.geminiModel || 'gemini-2.0-flash';
+      
+      if (!apiKey) {
+        summaryContent.innerHTML = `<div class="error">請先在設定中設置您的 Gemini API Key</div>`;
+        return;
+      }
+      
+      // 清空內容
+      summaryContent.innerHTML = '<div class="streaming-text"></div>';
+      const streamingElement = summaryContent.querySelector('.streaming-text');      try {
+        // 建立 Gemini API 請求
+        const prompt = `請以繁體中文簡潔摘要以下內容（100-200字）：\n\n${card.content}`;
+        
+        // 根據 Gemini API 文件，使用正確的 API 端點和 SSE 參數
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: prompt
+              }]
+            }],
+            generation_config: {
+              temperature: 0.2,
+              topP: 0.8,
+              topK: 40,
+              maxOutputTokens: 800
+            },
+            safety_settings: [
+              {
+                category: "HARM_CATEGORY_HARASSMENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              }
+            ]
+          })
+        });        // 檢查回應是否成功
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API 請求失敗 (${response.status}): ${errorText}`);
+        }
+        
+        // 處理 SSE 格式的串流回應
+        // 使用 TextDecoder 串流解碼 UTF-8 文字
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let summary = '';
+        
+        // 處理 SSE 格式
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          // 解碼伺服器回應的資料
+          const chunk = decoder.decode(value);
+          
+          // SSE 格式為每行以 "data: " 開頭
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            // 忽略空行和非資料行
+            if (!line.trim() || !line.startsWith('data: ')) continue;
+            
+            // 提取 JSON 字串 (移除 "data: " 前綴)
+            const jsonStr = line.substring(6);
+            
+            // 特殊處理結束訊號 "[DONE]"
+            if (jsonStr.trim() === '[DONE]') {
+              console.log('串流回應完成');
+              continue;
+            }
+            
+            try {
+              const data = JSON.parse(jsonStr);
+              if (data && data.candidates && data.candidates.length > 0) {
+                const candidate = data.candidates[0];
+                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+                  const part = candidate.content.parts[0];
+                  if (part.text) {
+                    summary += part.text;
+                    streamingElement.textContent = summary;
+                  }
+                }
+              }
+            } catch (jsonError) {
+              console.warn('解析 JSON 資料失敗:', jsonError);
+              // 繼續處理其他行
+            }
+          }
+        }
+        
+        if (summary.trim() === '') {
+          streamingElement.textContent = '無法生成摘要，請稍後再試。';
+        }
+          } catch (apiError) {
+        console.error('API 請求錯誤:', apiError);
+        summaryContent.innerHTML = `<div class="error">生成摘要時發生錯誤: ${apiError.message}</div>`;
+        
+        // 顯示更詳細的錯誤資訊以協助偵錯
+        console.log('API 設定：', {
+          model: model,
+          apiKeyLength: apiKey ? apiKey.length : 0,
+          cardContentLength: card.content.length
+        });
+      }
+    });
+  } catch (error) {
+    console.error('生成摘要失敗:', error);
+    summaryContent.innerHTML = `<div class="error">生成摘要時發生錯誤: ${error.message}</div>`;
   }
 }
