@@ -26,7 +26,10 @@
 3. 在網頁中移動滑鼠，選擇要擷取的區塊（會顯示紅色虛線框）。
 4. 點擊選取的區塊，完成擷取。擷取的內容將自動儲存為知識卡片。
 5. 點擊卡片的功能選單圖示 (⋮)，可執行朗讀、摘要、對話或刪除操作。
-6. 點擊右上角的設定圖示 (⚙️)，可設定 Gemini API 金鑰和語音速度。
+6. 點擊右上角的設定圖示 (⚙️)，可設定：
+   - Gemini API 金鑰
+   - Gemini 模型選擇
+   - 語音朗讀速度
 7. 點擊「匯出」按鈕，選擇要匯出的知識卡片，匯出為 TXT 檔案。
 
 ### 專案結構
@@ -44,7 +47,8 @@ KMExtension/
 │       ├── background.js        # 背景腳本
 │       ├── content-script.js    # 內容腳本 (擷取功能)
 │       ├── database.js          # 資料庫操作
-│       └── sidepanel.js         # 側邊欄功能
+│       ├── sidepanel.js         # 側邊欄功能
+│       └── turndown.js          # HTML 轉 Markdown 工具
 ├── package.json
 └── README.md
 ```
@@ -55,7 +59,8 @@ KMExtension/
 - **Chrome Side Panel API**: 用於在瀏覽器右側顯示側邊欄。
 - **Chrome Messaging API**: 用於內容腳本和側邊欄之間的通訊。
 - **Web Speech API**: 用於實現 TTS 文字朗讀功能。
-- **Gemini API**: 使用 Google Gemini 模型生成摘要內容。
+- **Gemini API**: 使用 Google Gemini 模型生成摘要內容與進行對話。
+- **Turndown.js**: 用於將擷取的 HTML 內容轉換為 Markdown 格式。
 
 ## 注意事項
 
@@ -63,5 +68,5 @@ KMExtension/
 - 清除瀏覽器資料可能會導致知識卡片遺失。
 - 擴充功能僅支援 Chrome 瀏覽器。
 - TTS 朗讀功能依賴於瀏覽器的語音合成引擎，不同系統可能有差異。
-- 摘要功能需要有效的 Gemini API 金鑰才能使用。
+- 摘要與對話功能需要有效的 Gemini API 金鑰才能使用。
 - Gemini API 有使用額度限制，請參考 Google 官方文件。

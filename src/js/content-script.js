@@ -109,7 +109,8 @@ function captureElement(element) {
   
   const pageTitle = document.title;
   const timestamp = new Date().toISOString();
-  const content = element.innerText || element.textContent;
+  const textContent = element.innerText || element.textContent;
+  const htmlContent = element.innerHTML;
   
   // 發送擷取的內容給側邊欄
   chrome.runtime.sendMessage({
@@ -117,12 +118,13 @@ function captureElement(element) {
     data: {
       pageTitle,
       timestamp,
-      content,
+      textContent,
+      htmlContent,
       url: window.location.href
     }
   }, (response) => {
     console.log('已擷取內容並發送到側邊欄', response);
   });
   
-  console.log('已擷取內容:', content);
+  console.log('已擷取內容:', textContent);
 } 

@@ -5,6 +5,26 @@
   box-sizing: border-box;
 }
 
+/* 自訂捲軸樣式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f5f5;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #dddddd;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #cccccc;
+}
+
 body {
   font-family: 'Microsoft JhengHei', Arial, sans-serif;
   font-size: 14px;
@@ -26,7 +46,7 @@ body {
 .function-bar {
   background-color: #5a85b8;
   color: white;
-  padding: 15px;
+  padding: 10px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
@@ -137,6 +157,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  scrollbar-width: thin; /* Firefox 相容性 */
+  scrollbar-color: #dddddd #f5f5f5; /* Firefox 相容性 */
 }
 
 /* 空白狀態 */
@@ -216,6 +238,8 @@ body {
   background-color: #f7f2e9;
   padding: 5px;
   border-radius: 5px;
+  scrollbar-width: thin; /* Firefox 相容性 */
+  scrollbar-color: #dddddd #f5f5f5; /* Firefox 相容性 */
 }
 
 .card-url {
@@ -279,10 +303,12 @@ body {
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  scrollbar-width: thin; /* Firefox 相容性 */
+  scrollbar-color: #dddddd #f5f5f5; /* Firefox 相容性 */
 }
 
 .modal-header {
-  padding: 10px;
+  padding: 5px 10px;
   border-bottom: 1px solid #eee;
   display: flex;
   justify-content: space-between;
@@ -295,7 +321,7 @@ body {
 }
 
 .close {
-  font-size: 24px;
+  font-size: 20px;
   color: #888;
   cursor: pointer;
 }
@@ -324,6 +350,8 @@ body {
   max-height: 300px;
   overflow-y: auto;
   margin-bottom: 15px;
+  scrollbar-width: thin; /* Firefox 相容性 */
+  scrollbar-color: #dddddd #f5f5f5; /* Firefox 相容性 */
 }
 
 .export-card-option {
@@ -463,6 +491,8 @@ body {
   margin-bottom: 15px;
   white-space: pre-wrap;
   line-height: 1.6;
+  scrollbar-width: thin; /* Firefox 相容性 */
+  scrollbar-color: #dddddd #f5f5f5; /* Firefox 相容性 */
 }
 
 .loading-indicator {
@@ -506,6 +536,8 @@ body {
   flex-direction: column;
   gap: 10px;
   background-color: #f8f8f8;
+  scrollbar-width: thin; /* Firefox 相容性 */
+  scrollbar-color: #dddddd #f5f5f5; /* Firefox 相容性 */
 }
 
 .chat-input-container {

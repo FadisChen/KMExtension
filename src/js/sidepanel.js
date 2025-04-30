@@ -226,9 +226,8 @@ function createCardElement(card) {
           <circle cx="12" cy="12" r="1"></circle>
           <circle cx="12" cy="19" r="1"></circle>
         </svg>
-      </div>
-    </div>
-    <div class="card-content">${card.content}</div>
+      </div>    </div>
+    <div class="card-content">${card.htmlContent || card.content || card.textContent}</div>
     ${card.url ? `<a href="${card.url}" class="card-url" target="_blank">${card.url}</a>` : ''}
   `;
   
@@ -303,6 +302,13 @@ function stopCapture() {
 // 儲存知識卡片
 async function saveCard(cardData) {
   try {
+    // 使用Turndown將HTML轉換為Markdown
+    if (cardData.htmlContent) {
+      const turndownService = new TurndownService();
+      const markdownContent = turndownService.turndown(cardData.htmlContent);
+      cardData.markdownContent = markdownContent;
+    }
+    
     await kmDatabase.saveCard(cardData);
     showNotification('知識已成功儲存', 'success');
     loadCards(); // 重新載入卡片
@@ -388,11 +394,10 @@ function exportSelectedCards() {
     selectedCards.forEach(card => {
       const timestamp = new Date(card.timestamp);
       const formattedDate = `${timestamp.getFullYear()}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}/${timestamp.getDate().toString().padStart(2, '0')} ${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
-      
-      exportContent += `標題: ${card.pageTitle}\n`;
+        exportContent += `標題: ${card.pageTitle}\n`;
       exportContent += `時間: ${formattedDate}\n`;
       exportContent += `網址: ${card.url || '無'}\n`;
-      exportContent += `內容:\n${card.content}\n\n`;
+      exportContent += `內容:\n${card.markdownContent || card.content || card.textContent}\n\n`;
       exportContent += '---------------------------------------------------\n\n';
     });
     
@@ -614,7 +619,7 @@ function saveSettings() {
 // 處理朗讀選單項點擊
 function handleSpeakMenuItemClick() {
   if (currentActiveCard) {
-    speakCardContent(currentActiveCard.content);
+    speakCardContent(currentActiveCard.content || currentActiveCard.textContent);
   }
   cardMenu.style.display = 'none';
 }
@@ -665,7 +670,7 @@ async function generateSummary(card) {
       summaryContent.innerHTML = '<div class="streaming-text"></div>';
       const streamingElement = summaryContent.querySelector('.streaming-text');      try {
         // 建立 Gemini API 請求
-        const prompt = `請以繁體中文簡潔摘要以下內容（100-200字）：\n\n${card.content}`;
+        const prompt = `請以繁體中文簡潔摘要以下內容（100-200字）：\n\n${card.markdownContent}`;
         
         // 根據 Gemini API 文件，使用正確的 API 端點和 SSE 參數
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`, {
@@ -678,19 +683,7 @@ async function generateSummary(card) {
               parts: [{
                 text: prompt
               }]
-            }],
-            generation_config: {
-              temperature: 0.2,
-              topP: 0.8,
-              topK: 40,
-              maxOutputTokens: 800
-            },
-            safety_settings: [
-              {
-                category: "HARM_CATEGORY_HARASSMENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE"
-              }
-            ]
+            }]
           })
         });        // 檢查回應是否成功
         if (!response.ok) {
@@ -895,15 +888,12 @@ async function handleChatSend() {
         const requestBody = {
           system_instruction: {
             parts: [{
-              text: `你是個知識問答助手。請根據以下文章進行回答，如果問題與文章無關則回覆不知道。\n\n${currentChatCard.content}`
+              text: `你是知識問答助手。請根據以下文章以繁體中文進行回答，如果問題與文章無關則回覆不知道。\n\n${currentChatCard.markdownContent}`
             }]
           },
           contents: chatHistory,
           generation_config: {
-            temperature: 0.4,
-            topP: 0.95,
-            topK: 32,
-            maxOutputTokens: 8192
+            temperature: 0.4
           }
         };
         
