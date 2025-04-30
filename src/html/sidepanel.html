@@ -10,7 +10,7 @@
   <div class="side-panel">    <!-- 功能列 -->    <div class="function-bar">
       <div class="function-buttons">
         <button id="captureBtn" class="btn capture-btn">擷取</button>
-        <button id="cancelCaptureBtn" class="btn cancel-btn" style="display: none;">取消擷取</button>
+        <button id="cancelCaptureBtn" class="btn cancel-btn" style="display: none;">取消</button>
         <button id="exportBtn" class="btn export-btn">匯出</button>
         <div class="settings-icon" id="settingsIcon" title="設定">⚙️</div>
       </div>
@@ -70,13 +70,16 @@
   <!-- 卡片功能選單 -->
   <div id="cardMenu" class="context-menu" style="display: none;">
     <div class="menu-item" id="speakMenuItem">
-      <span class="menu-icon">🔊</span>朗讀內容
+      <span class="menu-icon">🔊</span>朗讀
     </div>
     <div class="menu-item" id="summarizeMenuItem">
-      <span class="menu-icon">📝</span>產生摘要
+      <span class="menu-icon">📝</span>摘要
+    </div>
+    <div class="menu-item" id="chatMenuItem">
+      <span class="menu-icon">💬</span>對話
     </div>
     <div class="menu-item" id="deleteMenuItem">
-      <span class="menu-icon">❌</span>刪除卡片
+      <span class="menu-icon">❌</span>刪除
     </div>
   </div>
 
@@ -93,6 +96,23 @@
         </div>
         <div class="modal-buttons">
           <button id="closeSummaryBtn" class="btn cancel-btn">關閉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 對話視窗 -->
+  <div id="chatModal" class="modal" style="display: none;">
+    <div class="modal-content chat-modal-content">
+      <div class="modal-header">
+        <h2></h2>
+        <span class="close" id="closeChatModal">&times;</span>
+      </div>
+      <div class="modal-body chat-modal-body">
+        <div id="chatContent" class="chat-content"></div>
+        <div class="chat-input-container">
+          <input type="text" id="chatInput" class="chat-input" placeholder="輸入您的問題...">
+          <button id="sendChatBtn" class="btn send-btn">送出</button>
         </div>
       </div>
     </div>

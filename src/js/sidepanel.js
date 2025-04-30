@@ -21,12 +21,20 @@ const cardMenu = document.getElementById('cardMenu');
 const speakMenuItem = document.getElementById('speakMenuItem');
 const summarizeMenuItem = document.getElementById('summarizeMenuItem');
 const deleteMenuItem = document.getElementById('deleteMenuItem');
+const chatMenuItem = document.getElementById('chatMenuItem');
 
 // 摘要視窗元素
 const summaryModal = document.getElementById('summaryModal');
 const closeSummaryModal = document.getElementById('closeSummaryModal');
 const closeSummaryBtn = document.getElementById('closeSummaryBtn');
 const summaryContent = document.getElementById('summaryContent');
+
+// 對話視窗元素
+const chatModal = document.getElementById('chatModal');
+const closeChatModal = document.getElementById('closeChatModal');
+const chatContent = document.getElementById('chatContent');
+const chatInput = document.getElementById('chatInput');
+const sendChatBtn = document.getElementById('sendChatBtn');
 
 // 匯出模態框元素
 const exportModal = document.getElementById('exportModal');
@@ -50,6 +58,10 @@ let currentActiveCard = null;
 
 // 當前是否處於擷取模式
 let isCapturing = false;
+
+// 全域變數儲存當前對話的卡片內容和對話歷史
+let currentChatCard = null;
+let chatHistory = [];
 
 // 初始化頁面
 document.addEventListener('DOMContentLoaded', () => {
@@ -101,6 +113,10 @@ function setupEventListeners() {
     deleteMenuItem.addEventListener('click', handleDeleteMenuItemClick);
   }
   
+  if (chatMenuItem) {
+    chatMenuItem.addEventListener('click', handleChatMenuItemClick);
+  }
+  
   // 摘要視窗
   if (closeSummaryModal) {
     closeSummaryModal.addEventListener('click', hideSummaryModal);
@@ -138,6 +154,23 @@ function setupEventListeners() {
     sendResponse({ status: 'received' });
     return true;
   });
+
+  // 對話視窗
+  if (closeChatModal) {
+    closeChatModal.addEventListener('click', hideChatModal);
+  }
+  
+  if (chatInput) {
+    chatInput.addEventListener('keypress', (event) => {
+      if (event.key === 'Enter') {
+        handleChatSend();
+      }
+    });
+  }
+  
+  if (sendChatBtn) {
+    sendChatBtn.addEventListener('click', handleChatSend);
+  }
 }
 
 // 載入所有知識卡片
@@ -733,3 +766,266 @@ async function generateSummary(card) {
     summaryContent.innerHTML = `<div class="error">生成摘要時發生錯誤: ${error.message}</div>`;
   }
 }
+
+// 處理對話選單項點擊
+function handleChatMenuItemClick() {
+  if (currentActiveCard) {
+    startChat(currentActiveCard);
+  }
+  cardMenu.style.display = 'none';
+}
+
+// 顯示對話視窗
+function showChatModal() {
+  chatModal.style.display = 'flex';
+  // 聚焦到輸入框
+  setTimeout(() => {
+    chatInput.focus();
+  }, 100);
+}
+
+// 隱藏對話視窗
+function hideChatModal() {
+  chatModal.style.display = 'none';
+  chatInput.value = '';
+  
+  // 停止任何可能進行中的請求
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+}
+
+// 添加用戶訊息到對話視窗
+function addUserMessage(message) {
+  const messageElement = document.createElement('div');
+  messageElement.className = 'chat-message user-message';
+  messageElement.textContent = message;
+  
+  chatContent.appendChild(messageElement);
+  
+  // 滾動到底部
+  chatContent.scrollTop = chatContent.scrollHeight;
+  
+  // 添加到對話歷史
+  chatHistory.push({
+    role: 'user',
+    parts: [{ text: message }]
+  });
+}
+
+// 添加助手訊息到對話視窗
+function addAssistantMessage(message) {
+  const messageElement = document.createElement('div');
+  messageElement.className = 'chat-message assistant-message';
+  messageElement.textContent = message;
+  
+  chatContent.appendChild(messageElement);
+  
+  // 滾動到底部
+  chatContent.scrollTop = chatContent.scrollHeight;
+  
+  // 添加到對話歷史
+  chatHistory.push({
+    role: 'model',
+    parts: [{ text: message }]
+  });
+}
+
+// 添加載入指示器
+function addLoadingIndicator() {
+  const loadingElement = document.createElement('div');
+  loadingElement.className = 'chat-message assistant-message';
+  loadingElement.id = 'loadingMessage';
+  loadingElement.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  
+  chatContent.appendChild(loadingElement);
+  
+  // 滾動到底部
+  chatContent.scrollTop = chatContent.scrollHeight;
+  
+  return loadingElement;
+}
+
+// 移除載入指示器
+function removeLoadingIndicator() {
+  const loadingElement = document.getElementById('loadingMessage');
+  if (loadingElement) {
+    chatContent.removeChild(loadingElement);
+  }
+}
+
+// 用於中止請求的控制器
+let currentAbortController = null;
+
+// 處理聊天送出
+async function handleChatSend() {
+  const message = chatInput.value.trim();
+  
+  // 檢查訊息是否為空
+  if (!message || !currentChatCard) return;
+  
+  // 清空輸入框
+  chatInput.value = '';
+  
+  // 添加用戶訊息
+  addUserMessage(message);
+  
+  // 顯示載入指示器
+  const loadingIndicator = addLoadingIndicator();
+  
+  try {
+    // 從儲存的設定中獲取 API key 和模型
+    chrome.storage.sync.get(['geminiApiKey', 'geminiModel'], async (result) => {
+      const apiKey = result.geminiApiKey;
+      const model = result.geminiModel || 'gemini-2.0-flash';
+      
+      if (!apiKey) {
+        removeLoadingIndicator();
+        addAssistantMessage('請先在設定中設置您的 Gemini API Key');
+        return;
+      }
+      
+      try {
+        // 新建一個取消控制器來處理取消請求的情況
+        currentAbortController = new AbortController();
+        const signal = currentAbortController.signal;
+        
+        // 準備請求體
+        const requestBody = {
+          system_instruction: {
+            parts: [{
+              text: `你是個知識問答助手。請根據以下文章進行回答，如果問題與文章無關則回覆不知道。\n\n${currentChatCard.content}`
+            }]
+          },
+          contents: chatHistory,
+          generation_config: {
+            temperature: 0.4,
+            topP: 0.95,
+            topK: 32,
+            maxOutputTokens: 8192
+          }
+        };
+        
+        // 發送 API 請求
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody),
+            signal: signal
+          }
+        );
+        
+        // 檢查回應是否成功
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API 請求失敗 (${response.status}): ${errorText}`);
+        }
+        
+        // 移除載入指示器
+        removeLoadingIndicator();
+        
+        // 建立新的助手訊息元素
+        const assistantMessage = document.createElement('div');
+        assistantMessage.className = 'chat-message assistant-message';
+        chatContent.appendChild(assistantMessage);
+        
+        // 使用 TextDecoder 解碼響應流
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let responseText = '';
+        
+        // 讀取流式響應
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          // 解碼收到的數據
+          const chunk = decoder.decode(value);
+          
+          // 處理 SSE 格式的響應
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            // 忽略空行和非數據行
+            if (!line.trim() || !line.startsWith('data: ')) continue;
+            
+            // 提取 JSON 字符串（移除 "data: " 前綴）
+            const jsonStr = line.substring(6);
+            
+            // 特殊處理結束信號 "[DONE]"
+            if (jsonStr.trim() === '[DONE]') {
+              console.log('流式回應完成');
+              continue;
+            }
+            
+            try {
+              const data = JSON.parse(jsonStr);
+              if (data && data.candidates && data.candidates.length > 0) {
+                const candidate = data.candidates[0];
+                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+                  const part = candidate.content.parts[0];
+                  if (part.text) {
+                    responseText += part.text;
+                    assistantMessage.textContent = responseText;
+                    
+                    // 滾動到底部
+                    chatContent.scrollTop = chatContent.scrollHeight;
+                  }
+                }
+              }
+            } catch (jsonError) {
+              console.warn('解析 JSON 資料失敗:', jsonError);
+            }
+          }
+        }
+        
+        // 將生成的回應加入對話歷史
+        chatHistory.push({
+          role: 'model',
+          parts: [{ text: responseText }]
+        });
+        
+      } catch (error) {
+        // 檢查是否為中止錯誤
+        if (error.name === 'AbortError') {
+          console.log('請求已取消');
+        } else {
+          console.error('聊天 API 請求失敗:', error);
+          removeLoadingIndicator();
+          addAssistantMessage(`對話產生錯誤: ${error.message}`);
+        }
+      } finally {
+        currentAbortController = null;
+      }
+    });
+  } catch (error) {
+    console.error('處理對話失敗:', error);
+    removeLoadingIndicator();
+    addAssistantMessage(`對話功能發生錯誤: ${error.message}`);
+  }
+}
+
+// 開始對話
+function startChat(card) {
+  // 儲存當前卡片
+  currentChatCard = card;
+  
+  // 重置對話歷史
+  chatHistory = [];
+  
+  // 清空對話內容
+  chatContent.innerHTML = '';
+  
+  // 添加歡迎訊息
+  addAssistantMessage('您好！我可以協助您解答關於此知識卡片的問題。');
+  
+  // 顯示對話視窗
+  showChatModal();
+}
+
+// 測試添加的對話功能運作正常
+console.log('對話功能已添加');
