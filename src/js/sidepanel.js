@@ -393,27 +393,32 @@ function exportSelectedCards() {
     
     if (selectedCards.length === 0) return;
     
-    // 組織匯出內容
+    // 組織匯出內容（Markdown 格式）
     let exportContent = '';
     
     selectedCards.forEach(card => {
       const timestamp = new Date(card.timestamp);
       const formattedDate = `${timestamp.getFullYear()}/${(timestamp.getMonth() + 1).toString().padStart(2, '0')}/${timestamp.getDate().toString().padStart(2, '0')} ${timestamp.getHours().toString().padStart(2, '0')}:${timestamp.getMinutes().toString().padStart(2, '0')}`;
-        exportContent += `標題: ${card.pageTitle}\n`;
-      exportContent += `時間: ${formattedDate}\n`;
-      exportContent += `網址: ${card.url || '無'}\n`;
-      exportContent += `內容:\n${card.markdownContent || card.content || card.textContent}\n\n`;
-      exportContent += '---------------------------------------------------\n\n';
+      
+      // 使用 Markdown 格式
+      exportContent += `# ${card.pageTitle}\n\n`;
+      exportContent += `- **時間**: ${formattedDate}\n`;
+      exportContent += `- **網址**: ${card.url || '無'}\n\n`;
+      exportContent += `## 內容\n\n`;
+      
+      // 如果已有 Markdown 內容則直接使用，否則使用純文字
+      exportContent += `${card.markdownContent || card.content || card.textContent}\n\n`;
+      exportContent += '---\n\n';
     });
     
     // 建立並下載檔案
-    const blob = new Blob([exportContent], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([exportContent], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     
-    // 建立檔名：KM_Export_YYYYMMDD.txt
+    // 建立檔名：KM_Export_YYYYMMDD.md
     const now = new Date();
-    const fileName = `KM_Export_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}.txt`;
+    const fileName = `KM_Export_${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}.md`;
     
     a.href = url;
     a.download = fileName;
@@ -421,7 +426,7 @@ function exportSelectedCards() {
     
     URL.revokeObjectURL(url);
     hideExportModal();
-    showNotification('知識卡片已成功匯出', 'success');
+    showNotification('知識卡片已成功匯出為 Markdown 格式', 'success');
   });
 }
 
