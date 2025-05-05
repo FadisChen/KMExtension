@@ -14,6 +14,7 @@ const closeSettingsModal = document.getElementById('closeSettingsModal');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
 const geminiApiKeyInput = document.getElementById('geminiApiKey');
+const azureApiKeyInput = document.getElementById('azureApiKey');
 const geminiModelInput = document.getElementById('geminiModel');
 
 // 卡片功能選單元素
@@ -62,6 +63,10 @@ let isCapturing = false;
 // 全域變數儲存當前對話的卡片內容和對話歷史
 let currentChatCard = null;
 let chatHistory = [];
+
+// 全域變數追蹤朗讀狀態
+let isSpeaking = false;
+let audioElement = null;
 
 // 初始化頁面
 document.addEventListener('DOMContentLoaded', () => {
@@ -465,26 +470,163 @@ function showNotification(message, type = 'info') {
   }, 3000);
 }
 
-// 全域變數追蹤朗讀狀態
-let isSpeaking = false;
-
 // 朗讀卡片內容
-function speakCardContent(content) {
+async function speakCardContent(content) {
+  try {
+    // 如果正在朗讀則停止
+    if (isSpeaking) {
+      stopSpeaking();
+      return;
+    }
+    
+    // 從儲存的設定中獲取 Azure API Key 和語音速度
+    chrome.storage.sync.get(['azureApiKey', 'speechRate'], async (result) => {
+      const azureApiKey = result.azureApiKey;
+      const speechRate = parseFloat(result.speechRate || 1.0);
+      
+      // 嘗試使用 Azure TTS
+      if (azureApiKey) {
+        try {
+          await speakWithAzure(content, azureApiKey, speechRate);
+        } catch (error) {
+          console.error('Azure 語音服務錯誤，使用瀏覽器 TTS 作為備選:', error);
+          speakWithBrowser(content, speechRate);
+        }
+      } else {
+        // 使用瀏覽器內建 TTS
+        speakWithBrowser(content, speechRate);
+      }
+    });
+  } catch (error) {
+    console.error('朗讀功能發生錯誤:', error);
+    showNotification('朗讀功能發生錯誤', 'error');
+  }
+}
+
+// 使用 Azure TTS 服務
+async function speakWithAzure(content, apiKey, rate) {
+  // 顯示正在處理的通知
+  showNotification('正在準備 Azure 語音...', 'info');
+  
+  // 更新選單項文字
+  if (speakMenuItem) {
+    speakMenuItem.innerHTML = '<span class="menu-icon">⏸️</span>停止朗讀';
+  }
+  
+  // 建構 SSML
+  const rateValue = ((rate - 1.0) * 100).toFixed(0); // 轉換為百分比格式
+  const ssml = `
+    <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="zh-TW">
+      <voice name="zh-TW-HsiaoChenNeural">
+        <prosody rate="${rateValue}%">
+          ${content}
+        </prosody>
+      </voice>
+    </speak>
+  `;
+  
+  try {
+    // 定義東亞區域端點
+    const endpoint = 'https://eastasia.tts.speech.microsoft.com/cognitiveservices/v1';
+    
+    // 請求 Azure TTS 服務
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Ocp-Apim-Subscription-Key': apiKey,
+        'Content-Type': 'application/ssml+xml',
+        'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
+        'User-Agent': 'KMExtension'
+      },
+      body: ssml
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      let errorMessage = '';
+      
+      switch (response.status) {
+        case 401:
+          errorMessage = 'Azure API Key 無效或已過期';
+          break;
+        case 400:
+          errorMessage = '請求內容無效，SSML 格式可能有誤';
+          break;
+        case 429:
+          errorMessage = '請求速率超過限制，請稍後再試';
+          break;
+        case 502:
+        case 503:
+        case 504:
+          errorMessage = 'Azure 服務暫時不可用，請稍後再試';
+          break;
+        default:
+          errorMessage = `Azure TTS 服務回應錯誤: ${response.status}`;
+      }
+      
+      if (errorText) {
+        console.error('Azure TTS 錯誤回應:', errorText);
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    // 將回應轉換為 blob
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    
+    // 建立音頻元素
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.remove();
+    }
+    
+    audioElement = new Audio(url);
+    
+    // 設定音頻事件
+    audioElement.onplay = () => {
+      isSpeaking = true;
+      showNotification('開始朗讀內容', 'info');
+    };
+    
+    audioElement.onended = () => {
+      stopSpeaking();
+      URL.revokeObjectURL(url);
+      showNotification('朗讀已完成', 'success');
+    };
+    
+    audioElement.onerror = (error) => {
+      console.error('音頻播放錯誤:', error);
+      stopSpeaking();
+      URL.revokeObjectURL(url);
+      showNotification('音頻播放發生錯誤', 'error');
+    };
+    
+    // 播放音頻
+    await audioElement.play().catch(error => {
+      console.error('音頻播放啟動錯誤:', error);
+      throw new Error('無法啟動音頻播放');
+    });
+    
+  } catch (error) {
+    console.error('Azure TTS 服務錯誤:', error);
+    // 恢復選單項文字
+    if (speakMenuItem) {
+      speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
+    }
+    
+    showNotification(`Azure 語音服務出錯: ${error.message}`, 'error');
+    
+    // 拋出錯誤以使用後備方案
+    throw error;
+  }
+}
+
+// 使用瀏覽器內建 TTS
+function speakWithBrowser(content, rate) {
   // 檢查瀏覽器是否支援語音合成 API
   if ('speechSynthesis' in window) {
     try {
-      // 如果正在朗讀則停止
-      if (isSpeaking) {
-        window.speechSynthesis.cancel();
-        isSpeaking = false;
-        showNotification('已停止朗讀', 'info');
-        // 更新選單項文字
-        if (speakMenuItem) {
-          speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
-        }
-        return;
-      }
-      
       // 停止任何進行中的朗讀
       window.speechSynthesis.cancel();
       
@@ -495,7 +637,7 @@ function speakCardContent(content) {
       speech.lang = 'zh-TW';
       
       // 設定語音速度
-      speech.rate = parseFloat(speechRateInput.value);
+      speech.rate = rate;
       
       // 當朗讀開始時
       speech.onstart = () => {
@@ -509,28 +651,20 @@ function speakCardContent(content) {
       
       // 當朗讀結束時
       speech.onend = () => {
-        isSpeaking = false;
-        showNotification('朗讀已完成', 'success');
-        // 恢復選單項文字
-        if (speakMenuItem) {
-          speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
-        }
+        stopSpeaking();
       };
       
       // 朗讀發生錯誤時
       speech.onerror = (event) => {
-        isSpeaking = false;
-        // 恢復選單項文字
-        if (speakMenuItem) {
-          speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
-        }
+        console.error('瀏覽器 TTS 錯誤:', event);
+        stopSpeaking();
       };
       
       // 開始朗讀
       window.speechSynthesis.speak(speech);
     } catch (error) {
-      console.error('朗讀功能發生錯誤:', error);
-      showNotification('朗讀功能發生錯誤', 'error');
+      console.error('瀏覽器 TTS 發生錯誤:', error);
+      showNotification('瀏覽器朗讀功能發生錯誤', 'error');
     }
   } else {
     // 瀏覽器不支援語音合成
@@ -538,35 +672,42 @@ function speakCardContent(content) {
   }
 }
 
+// 停止當前朗讀
+function stopSpeaking() {
+  isSpeaking = false;
+  
+  // 停止 Azure 音頻
+  if (audioElement) {
+    audioElement.pause();
+    audioElement.currentTime = 0;
+  }
+  
+  // 停止瀏覽器 TTS
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  
+  // 恢復選單項文字
+  if (speakMenuItem) {
+    speakMenuItem.innerHTML = '<span class="menu-icon">🔊</span>朗讀內容';
+  }
+  
+  showNotification('已停止朗讀', 'info');
+}
+
 // 更新語音速度顯示
 function updateSpeechRate() {
   const value = parseFloat(speechRateInput.value);
   speechRateValue.textContent = value.toFixed(2);
   
-  // 如果正在朗讀，更新當前朗讀的速度
-  if (window.speechSynthesis.speaking) {
-    // 停止當前朗讀
-    const isSpeaking = window.speechSynthesis.speaking;
-    if (isSpeaking) {
-      // 暫存正在讀的內容
-      const speakingElement = document.querySelector('.speak-icon.speaking');
-      if (speakingElement) {
-        // 獲取卡片 ID
-        const cardId = speakingElement.dataset.id;
-        // 暫停朗讀
-        window.speechSynthesis.cancel();
-        // 清除朗讀狀態
-        document.querySelectorAll('.speak-icon').forEach(icon => {
-          icon.textContent = '🔊';
-          icon.classList.remove('speaking');
-        });
-        document.querySelectorAll('.knowledge-card').forEach(card => {
-          card.classList.remove('card-speaking');
-        });
-        showNotification(`已更新語音速度為 ${value.toFixed(2)} 倍速`, 'info');
-      }
-    }
+  // 如果正在朗讀，停止朗讀
+  if (isSpeaking) {
+    stopSpeaking();
+    showNotification(`已更新語音速度為 ${value.toFixed(2)} 倍速`, 'info');
   }
+  
+  // 保存設定
+  chrome.storage.sync.set({ speechRate: value });
 }
 
 // 顯示設定視窗
@@ -583,9 +724,13 @@ function hideSettingsModal() {
 
 // 載入設定
 function loadSettings() {
-  chrome.storage.sync.get(['geminiApiKey', 'geminiModel', 'speechRate'], (result) => {
+  chrome.storage.sync.get(['geminiApiKey', 'geminiModel', 'speechRate', 'azureApiKey'], (result) => {
     if (result.geminiApiKey) {
       geminiApiKeyInput.value = result.geminiApiKey;
+    }
+    
+    if (result.azureApiKey) {
+      azureApiKeyInput.value = result.azureApiKey;
     }
     
     if (result.geminiModel) {
@@ -595,10 +740,10 @@ function loadSettings() {
       geminiModelInput.value = 'gemini-2.0-flash';
     }
     
-    if (result.speechRate) {
-      speechRateInput.value = result.speechRate;
-      updateSpeechRate();
-    }
+    // 設定語音速度，若無則使用預設值 1.0
+    const rate = result.speechRate || 1.0;
+    speechRateInput.value = rate;
+    speechRateValue.textContent = parseFloat(rate).toFixed(2);
   });
 }
 
@@ -607,7 +752,8 @@ function saveSettings() {
   const settings = {
     geminiApiKey: geminiApiKeyInput.value,
     geminiModel: geminiModelInput.value,
-    speechRate: speechRateInput.value
+    speechRate: speechRateInput.value,
+    azureApiKey: azureApiKeyInput.value
   };
   
   chrome.storage.sync.set(settings, () => {
